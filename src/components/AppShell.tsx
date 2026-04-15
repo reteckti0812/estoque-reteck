@@ -15,7 +15,6 @@ interface AppShellProps {
 const navItems = [
   { id: "lots", label: "Lotes", icon: Package },
   { id: "map", label: "Mapa", icon: Map },
-  { id: "dashboard", label: "Dashboard", icon: BarChart3 },
   { id: "admin", label: "Admin", icon: Settings, adminOnly: true },
 ];
 

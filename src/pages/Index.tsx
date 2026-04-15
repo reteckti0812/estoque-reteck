@@ -62,7 +62,6 @@ const Index: React.FC = () => {
         />
       );
     }
-    if (page === "dashboard") return <AdminPanel />;
     if (page === "admin") return <AdminPanel />;
     return null;
   };
