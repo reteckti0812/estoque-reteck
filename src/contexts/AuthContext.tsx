@@ -14,7 +14,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [user, setUser] = useState<User | null>(mockUsers[0]); // Auto-login admin for dev
 
   const login = useCallback(async (email: string, password: string) => {
-    const found = mockUsers.find((u) => u.email === email && u.password === password);
+    const found = mockUsers.find((u) => u.email === email && u.password === password && u.active);
     if (found) {
       setUser(found);
       return true;

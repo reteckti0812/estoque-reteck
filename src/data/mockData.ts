@@ -8,6 +8,8 @@ export interface User {
   email: string;
   role: "admin" | "operator";
   password: string;
+  active: boolean;
+  createdAt: string;
 }
 
 export interface ProductModel {
@@ -19,6 +21,27 @@ export interface ProductModel {
 export interface DefectType {
   id: string;
   name: string;
+}
+
+export interface ProductCategory {
+  id: string;
+  name: string;
+  description: string;
+  active: boolean;
+}
+
+export interface LotCategory {
+  id: string;
+  code: string;
+  fullName: string;
+  description: string;
+  active: boolean;
+}
+
+export interface Voltage {
+  id: string;
+  label: string;
+  active: boolean;
 }
 
 export interface LotItem {
@@ -54,6 +77,8 @@ export interface AuditLog {
   action: string;
   details: string;
   timestamp: string;
+  oldData?: string;
+  newData?: string;
 }
 
 export interface Notification {
@@ -73,9 +98,9 @@ export interface PalletCell {
 
 // ---------- Users ----------
 export const mockUsers: User[] = [
-  { id: "u1", name: "Carlos Admin", email: "admin@reteck.com", role: "admin", password: "admin123" },
-  { id: "u2", name: "Maria Operadora", email: "maria@reteck.com", role: "operator", password: "op123" },
-  { id: "u3", name: "João Operador", email: "joao@reteck.com", role: "operator", password: "op123" },
+  { id: "u1", name: "Carlos Admin", email: "admin@reteck.com", role: "admin", password: "admin123", active: true, createdAt: "2026-01-01T08:00:00" },
+  { id: "u2", name: "Maria Operadora", email: "maria@reteck.com", role: "operator", password: "op123", active: true, createdAt: "2026-01-15T08:00:00" },
+  { id: "u3", name: "João Operador", email: "joao@reteck.com", role: "operator", password: "op123", active: true, createdAt: "2026-02-01T08:00:00" },
 ];
 
 // ---------- Product Models ----------
@@ -106,11 +131,31 @@ export const mockDefectTypes: DefectType[] = [
   { id: "d10", name: "Sem Defeito Aparente" },
 ];
 
-// ---------- Categories ----------
-export const lotCategories = ["Liga", "NI", "IQ", "NF", "Cosmético", "Outro"];
+// ---------- Product Categories ----------
+export const mockProductCategories: ProductCategory[] = [
+  { id: "pc1", name: "Eletrodomésticos", description: "Aparelhos domésticos em geral", active: true },
+  { id: "pc2", name: "Informática", description: "Notebooks, desktops e periféricos", active: true },
+  { id: "pc3", name: "Smartphones", description: "Celulares e acessórios", active: true },
+  { id: "pc4", name: "Tablets", description: "Tablets e e-readers", active: true },
+];
+
+// ---------- Lot Categories ----------
+export const mockLotCategories: LotCategory[] = [
+  { id: "lc1", code: "Liga", fullName: "Liga", description: "Produtos que ligam", active: true },
+  { id: "lc2", code: "NI", fullName: "Não Identificado", description: "Produtos não identificados", active: true },
+  { id: "lc3", code: "IQ", fullName: "Item Qualificado", description: "Itens qualificados para revenda", active: true },
+  { id: "lc4", code: "NF", fullName: "Não Funcional", description: "Produtos sem funcionamento", active: true },
+  { id: "lc5", code: "Cosmético", fullName: "Cosmético", description: "Apenas dano estético", active: true },
+  { id: "lc6", code: "Outro", fullName: "Outro", description: "Categorias diversas", active: true },
+];
 
 // ---------- Voltages ----------
-export const voltageOptions = ["110v", "220v", "Bivolt", "N/A"];
+export const mockVoltages: Voltage[] = [
+  { id: "v1", label: "110V", active: true },
+  { id: "v2", label: "220V", active: true },
+  { id: "v3", label: "Bivolt", active: true },
+  { id: "v4", label: "N/A", active: true },
+];
 
 // ---------- Lots ----------
 export const mockLots: Lot[] = [
@@ -136,7 +181,7 @@ export const mockLots: Lot[] = [
     name: "Lote Samsung Fevereiro",
     products: ["Galaxy S23", "Galaxy A54"],
     category: "NI",
-    voltage: "220v",
+    voltage: "220V",
     lotNumber: 1002,
     observation: "Samsung de parceiro X",
     status: "paused",
@@ -152,7 +197,7 @@ export const mockLots: Lot[] = [
     name: "Lote Misto Março",
     products: ["Pixel 7", "MacBook Air M2"],
     category: "IQ",
-    voltage: "110v",
+    voltage: "110V",
     lotNumber: 1003,
     observation: "",
     status: "finished",
