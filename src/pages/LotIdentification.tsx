@@ -1,6 +1,5 @@
 import React, { useState } from "react";
 import { useInventory } from "@/contexts/InventoryContext";
-import { lotCategories, voltageOptions } from "@/data/mockData";
 import AutocompleteInput from "@/components/AutocompleteInput";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -13,10 +12,9 @@ interface LotIdentificationProps {
 }
 
 const LotIdentification: React.FC<LotIdentificationProps> = ({ onStartLot }) => {
-  const { lots, productModels, createLot, resumeLot } = useInventory();
+  const { lots, productModels, lotCategories, voltages, createLot, resumeLot } = useInventory();
   const [showPaused, setShowPaused] = useState(false);
 
-  // Form state
   const [name, setName] = useState("");
   const [selectedProducts, setSelectedProducts] = useState<string[]>([]);
   const [currentProduct, setCurrentProduct] = useState("");
@@ -27,6 +25,8 @@ const LotIdentification: React.FC<LotIdentificationProps> = ({ onStartLot }) => 
 
   const productOptions = productModels.map((p) => ({ id: p.id, label: `${p.brand} - ${p.name}` }));
   const pausedLots = lots.filter((l) => l.status === "paused");
+  const activeLotCategories = lotCategories.filter((c) => c.active);
+  const activeVoltages = voltages.filter((v) => v.active);
 
   const handleAddProduct = () => {
     if (currentProduct && !selectedProducts.includes(currentProduct)) {
@@ -146,7 +146,7 @@ const LotIdentification: React.FC<LotIdentificationProps> = ({ onStartLot }) => 
                   required
                 >
                   <option value="">Selecione</option>
-                  {lotCategories.map((c) => <option key={c} value={c}>{c}</option>)}
+                  {activeLotCategories.map((c) => <option key={c.id} value={c.code}>{c.code} — {c.fullName}</option>)}
                 </select>
               </div>
               <div>
@@ -157,7 +157,7 @@ const LotIdentification: React.FC<LotIdentificationProps> = ({ onStartLot }) => 
                   onChange={(e) => setVoltage(e.target.value)}
                 >
                   <option value="">Selecione</option>
-                  {voltageOptions.map((v) => <option key={v} value={v}>{v}</option>)}
+                  {activeVoltages.map((v) => <option key={v.id} value={v.label}>{v.label}</option>)}
                 </select>
               </div>
             </div>
