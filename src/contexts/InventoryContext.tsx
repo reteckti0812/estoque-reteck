@@ -1,9 +1,9 @@
 import React, { createContext, useContext, useState, useCallback } from "react";
 import {
   Lot, LotItem, ProductModel, DefectType, AuditLog, Notification, PalletCell,
-  ProductCategory, LotCategory, Voltage, User,
+  User, LegendEntry, ACTION_LABELS,
   mockLots, mockProductModels, mockDefectTypes, mockAuditLogs, mockNotifications, mockPalletMap,
-  mockProductCategories, mockLotCategories, mockVoltages, mockUsers,
+  mockUsers, mockLegends,
 } from "@/data/mockData";
 import { useAuth } from "./AuthContext";
 
@@ -11,39 +11,38 @@ interface InventoryContextType {
   lots: Lot[];
   productModels: ProductModel[];
   defectTypes: DefectType[];
-  productCategories: ProductCategory[];
-  lotCategories: LotCategory[];
-  voltages: Voltage[];
   users: User[];
   auditLogs: AuditLog[];
   notifications: Notification[];
   palletMap: PalletCell[];
-  createLot: (lot: Omit<Lot, "id" | "items" | "status" | "createdAt" | "createdBy">) => Promise<Lot>;
+  legends: LegendEntry[];
+  // Lots
+  createLot: (data: { name: string; isB2B: boolean; observation: string }) => Promise<Lot>;
   addItemToLot: (lotId: string, item: Omit<LotItem, "id" | "createdAt" | "createdBy">) => Promise<LotItem>;
+  deleteLastItem: (lotId: string) => Promise<void>;
+  deleteItem: (lotId: string, itemId: string) => Promise<void>;
   pauseLot: (lotId: string) => Promise<void>;
   resumeLot: (lotId: string) => Promise<void>;
   finishLot: (lotId: string, address: string) => Promise<void>;
+  finishLotWithoutLocation: (lotId: string) => Promise<void>;
   placePallet: (street: string, column: number, level: number, lotId: string) => Promise<void>;
+  // Products
   addProductModel: (model: Omit<ProductModel, "id">) => Promise<void>;
-  addDefectType: (defect: Omit<DefectType, "id">) => Promise<void>;
+  updateProductModel: (id: string, data: Partial<ProductModel>) => Promise<void>;
   deleteProductModel: (id: string) => Promise<void>;
+  // Defects
+  addDefectType: (defect: Omit<DefectType, "id">) => Promise<void>;
+  updateDefectType: (id: string, data: Partial<DefectType>) => Promise<void>;
   deleteDefectType: (id: string) => Promise<void>;
-  // Product Categories
-  addProductCategory: (cat: Omit<ProductCategory, "id">) => Promise<void>;
-  updateProductCategory: (id: string, data: Partial<ProductCategory>) => Promise<void>;
-  toggleProductCategory: (id: string) => Promise<{ blocked: boolean; count: number }>;
-  // Lot Categories
-  addLotCategory: (cat: Omit<LotCategory, "id">) => Promise<void>;
-  updateLotCategory: (id: string, data: Partial<LotCategory>) => Promise<void>;
-  toggleLotCategory: (id: string) => Promise<{ blocked: boolean; count: number }>;
-  // Voltages
-  addVoltage: (v: Omit<Voltage, "id">) => Promise<void>;
-  updateVoltage: (id: string, data: Partial<Voltage>) => Promise<void>;
-  toggleVoltage: (id: string) => Promise<{ blocked: boolean; count: number }>;
   // Users
   addUser: (u: Omit<User, "id" | "createdAt">) => Promise<string>;
   updateUser: (id: string, data: Partial<User>) => Promise<void>;
-  toggleUser: (id: string) => Promise<{ blocked: boolean; reason?: string }>;
+  deleteUser: (id: string) => Promise<{ blocked: boolean; reason?: string }>;
+  // Legends
+  addLegend: (l: Omit<LegendEntry, "id">) => Promise<void>;
+  updateLegend: (id: string, data: Partial<LegendEntry>) => Promise<void>;
+  deleteLegend: (id: string) => Promise<void>;
+  // Notifications
   markNotificationRead: (id: string) => void;
   unreadCount: number;
 }
@@ -55,20 +54,19 @@ export const InventoryProvider: React.FC<{ children: React.ReactNode }> = ({ chi
   const [lots, setLots] = useState<Lot[]>(mockLots);
   const [productModels, setProductModels] = useState<ProductModel[]>(mockProductModels);
   const [defectTypes, setDefectTypes] = useState<DefectType[]>(mockDefectTypes);
-  const [productCategories, setProductCategories] = useState<ProductCategory[]>(mockProductCategories);
-  const [lotCategories, setLotCategories] = useState<LotCategory[]>(mockLotCategories);
-  const [voltages, setVoltages] = useState<Voltage[]>(mockVoltages);
   const [users, setUsers] = useState<User[]>(mockUsers);
   const [auditLogs, setAuditLogs] = useState<AuditLog[]>(mockAuditLogs);
   const [notifications, setNotifications] = useState<Notification[]>(mockNotifications);
   const [palletMap, setPalletMap] = useState<PalletCell[]>(mockPalletMap);
+  const [legends, setLegends] = useState<LegendEntry[]>(mockLegends);
 
   const addLog = useCallback((action: string, details: string, oldData?: string, newData?: string) => {
     const log: AuditLog = {
-      id: `a${Date.now()}`,
+      id: `a${Date.now()}${Math.random().toString(36).slice(2, 5)}`,
       userId: user?.id || "",
       userName: user?.name || "",
       action,
+      actionLabel: ACTION_LABELS[action] || action,
       details,
       timestamp: new Date().toISOString(),
       oldData,
@@ -85,10 +83,19 @@ export const InventoryProvider: React.FC<{ children: React.ReactNode }> = ({ chi
   }, []);
 
   // === Lot operations ===
-  const createLot = useCallback(async (data: Omit<Lot, "id" | "items" | "status" | "createdAt" | "createdBy">) => {
-    const lot: Lot = { ...data, id: `l${Date.now()}`, items: [], status: "active", createdAt: new Date().toISOString(), createdBy: user?.id || "" };
+  const createLot = useCallback(async (data: { name: string; isB2B: boolean; observation: string }) => {
+    const lot: Lot = {
+      id: `l${Date.now()}`,
+      name: data.name,
+      isB2B: data.isB2B,
+      observation: data.observation,
+      items: [],
+      status: "active",
+      createdAt: new Date().toISOString(),
+      createdBy: user?.id || "",
+    };
     setLots((prev) => [lot, ...prev]);
-    addLog("LOT_CREATED", `Lote ${data.name} criado`);
+    addLog("LOT_CREATED", `Lote ${data.name} criado${data.isB2B ? " (B2B)" : ""}`);
     addNotif(`Novo lote "${data.name}" criado por ${user?.name}`);
     return lot;
   }, [user, addLog, addNotif]);
@@ -96,9 +103,27 @@ export const InventoryProvider: React.FC<{ children: React.ReactNode }> = ({ chi
   const addItemToLot = useCallback(async (lotId: string, itemData: Omit<LotItem, "id" | "createdAt" | "createdBy">) => {
     const item: LotItem = { ...itemData, id: `li${Date.now()}`, createdAt: new Date().toISOString(), createdBy: user?.id || "" };
     setLots((prev) => prev.map((l) => l.id === lotId ? { ...l, items: [...l.items, item] } : l));
-    addLog("ITEM_ADDED", `${itemData.productName} adicionado ao lote ${lotId}`);
+    addLog("ITEM_ADDED", `${itemData.productName} adicionado ao lote`);
     return item;
   }, [user, addLog]);
+
+  const deleteLastItem = useCallback(async (lotId: string) => {
+    setLots((prev) => prev.map((l) => {
+      if (l.id !== lotId || l.items.length === 0) return l;
+      const last = l.items[l.items.length - 1];
+      addLog("ITEM_DELETED", `Último item "${last.productName}" removido do lote ${l.name}`);
+      return { ...l, items: l.items.slice(0, -1) };
+    }));
+  }, [addLog]);
+
+  const deleteItem = useCallback(async (lotId: string, itemId: string) => {
+    setLots((prev) => prev.map((l) => {
+      if (l.id !== lotId) return l;
+      const it = l.items.find((i) => i.id === itemId);
+      if (it) addLog("ITEM_DELETED", `Item "${it.productName}" removido do lote ${l.name} (admin)`);
+      return { ...l, items: l.items.filter((i) => i.id !== itemId) };
+    }));
+  }, [addLog]);
 
   const pauseLot = useCallback(async (lotId: string) => {
     setLots((prev) => prev.map((l) => l.id === lotId ? { ...l, status: "paused" } : l));
@@ -119,6 +144,13 @@ export const InventoryProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     addNotif(`Lote "${lot?.name}" finalizado por ${user?.name}`);
   }, [lots, user, addLog, addNotif]);
 
+  const finishLotWithoutLocation = useCallback(async (lotId: string) => {
+    setLots((prev) => prev.map((l) => l.id === lotId ? { ...l, status: "awaiting_location" } : l));
+    const lot = lots.find((l) => l.id === lotId);
+    addLog("LOT_AWAITING_LOCATION", `Lote ${lot?.name} finalizado sem localização (aguardando endereçamento)`);
+    addNotif(`Lote "${lot?.name}" finalizado sem localização por ${user?.name}`);
+  }, [lots, user, addLog, addNotif]);
+
   const placePallet = useCallback(async (street: string, column: number, level: number, lotId: string) => {
     const lot = lots.find((l) => l.id === lotId);
     setPalletMap((prev) => [...prev, { street, column, level, lotId, lotName: lot?.name }]);
@@ -126,105 +158,49 @@ export const InventoryProvider: React.FC<{ children: React.ReactNode }> = ({ chi
 
   // === Product Models ===
   const addProductModel = useCallback(async (model: Omit<ProductModel, "id">) => {
-    setProductModels((prev) => [...prev, { ...model, id: `pm${Date.now()}` }]);
-    addLog("PRODUCT_MODEL_ADDED", `Modelo ${model.name} cadastrado`);
+    const newPm = { ...model, id: `pm${Date.now()}` };
+    setProductModels((prev) => [...prev, newPm]);
+    addLog("PRODUCT_MODEL_ADDED", `Modelo ${model.brand} - ${model.name} cadastrado`, undefined, JSON.stringify(newPm));
+  }, [addLog]);
+
+  const updateProductModel = useCallback(async (id: string, data: Partial<ProductModel>) => {
+    setProductModels((prev) => {
+      const old = prev.find((p) => p.id === id);
+      addLog("PRODUCT_MODEL_UPDATED", `Modelo "${old?.brand} - ${old?.name}" atualizado`, JSON.stringify(old), JSON.stringify({ ...old, ...data }));
+      return prev.map((p) => p.id === id ? { ...p, ...data } : p);
+    });
   }, [addLog]);
 
   const deleteProductModel = useCallback(async (id: string) => {
-    setProductModels((prev) => prev.filter((p) => p.id !== id));
-  }, []);
+    setProductModels((prev) => {
+      const old = prev.find((p) => p.id === id);
+      if (old) addLog("PRODUCT_MODEL_DELETED", `Modelo "${old.brand} - ${old.name}" removido`, JSON.stringify(old));
+      return prev.filter((p) => p.id !== id);
+    });
+  }, [addLog]);
 
   // === Defect Types ===
   const addDefectType = useCallback(async (defect: Omit<DefectType, "id">) => {
-    setDefectTypes((prev) => [...prev, { ...defect, id: `d${Date.now()}` }]);
-    addLog("DEFECT_TYPE_ADDED", `Defeito ${defect.name} cadastrado`);
+    const newD = { ...defect, id: `d${Date.now()}` };
+    setDefectTypes((prev) => [...prev, newD]);
+    addLog("DEFECT_TYPE_ADDED", `Defeito ${defect.name} cadastrado`, undefined, JSON.stringify(newD));
+  }, [addLog]);
+
+  const updateDefectType = useCallback(async (id: string, data: Partial<DefectType>) => {
+    setDefectTypes((prev) => {
+      const old = prev.find((d) => d.id === id);
+      addLog("DEFECT_TYPE_UPDATED", `Defeito "${old?.name}" atualizado`, JSON.stringify(old), JSON.stringify({ ...old, ...data }));
+      return prev.map((d) => d.id === id ? { ...d, ...data } : d);
+    });
   }, [addLog]);
 
   const deleteDefectType = useCallback(async (id: string) => {
-    setDefectTypes((prev) => prev.filter((d) => d.id !== id));
-  }, []);
-
-  // === Product Categories ===
-  const addProductCategory = useCallback(async (cat: Omit<ProductCategory, "id">) => {
-    const newCat = { ...cat, id: `pc${Date.now()}` };
-    setProductCategories((prev) => [...prev, newCat]);
-    addLog("PRODUCT_CATEGORY_ADDED", `Categoria de produto "${cat.name}" criada`, undefined, JSON.stringify(newCat));
-  }, [addLog]);
-
-  const updateProductCategory = useCallback(async (id: string, data: Partial<ProductCategory>) => {
-    setProductCategories((prev) => {
-      const old = prev.find((c) => c.id === id);
-      const updated = prev.map((c) => c.id === id ? { ...c, ...data } : c);
-      addLog("PRODUCT_CATEGORY_UPDATED", `Categoria "${old?.name}" atualizada`, JSON.stringify(old), JSON.stringify({ ...old, ...data }));
-      return updated;
+    setDefectTypes((prev) => {
+      const old = prev.find((d) => d.id === id);
+      if (old) addLog("DEFECT_TYPE_DELETED", `Defeito "${old.name}" removido`, JSON.stringify(old));
+      return prev.filter((d) => d.id !== id);
     });
   }, [addLog]);
-
-  const toggleProductCategory = useCallback(async (id: string): Promise<{ blocked: boolean; count: number }> => {
-    const cat = productCategories.find((c) => c.id === id);
-    if (!cat) return { blocked: true, count: 0 };
-    // No dependency check for product categories in this mock — just toggle
-    setProductCategories((prev) => prev.map((c) => c.id === id ? { ...c, active: !c.active } : c));
-    addLog("PRODUCT_CATEGORY_TOGGLED", `Categoria "${cat.name}" ${cat.active ? "desativada" : "ativada"}`);
-    return { blocked: false, count: 0 };
-  }, [productCategories, addLog]);
-
-  // === Lot Categories ===
-  const addLotCategory = useCallback(async (cat: Omit<LotCategory, "id">) => {
-    const newCat = { ...cat, id: `lc${Date.now()}` };
-    setLotCategories((prev) => [...prev, newCat]);
-    addLog("LOT_CATEGORY_ADDED", `Categoria de lote "${cat.code}" criada`, undefined, JSON.stringify(newCat));
-  }, [addLog]);
-
-  const updateLotCategory = useCallback(async (id: string, data: Partial<LotCategory>) => {
-    setLotCategories((prev) => {
-      const old = prev.find((c) => c.id === id);
-      const updated = prev.map((c) => c.id === id ? { ...c, ...data } : c);
-      addLog("LOT_CATEGORY_UPDATED", `Categoria de lote "${old?.code}" atualizada`, JSON.stringify(old), JSON.stringify({ ...old, ...data }));
-      return updated;
-    });
-  }, [addLog]);
-
-  const toggleLotCategory = useCallback(async (id: string): Promise<{ blocked: boolean; count: number }> => {
-    const cat = lotCategories.find((c) => c.id === id);
-    if (!cat) return { blocked: true, count: 0 };
-    // Check if lots use this category
-    const depCount = lots.filter((l) => l.category === cat.code).length;
-    if (cat.active && depCount > 0) {
-      // Allow but warn — caller handles confirmation
-      setLotCategories((prev) => prev.map((c) => c.id === id ? { ...c, active: false } : c));
-      addLog("LOT_CATEGORY_DEACTIVATED", `Categoria de lote "${cat.code}" desativada (${depCount} lotes dependentes)`);
-      return { blocked: false, count: depCount };
-    }
-    setLotCategories((prev) => prev.map((c) => c.id === id ? { ...c, active: !c.active } : c));
-    addLog("LOT_CATEGORY_TOGGLED", `Categoria de lote "${cat.code}" ${cat.active ? "desativada" : "ativada"}`);
-    return { blocked: false, count: 0 };
-  }, [lotCategories, lots, addLog]);
-
-  // === Voltages ===
-  const addVoltage = useCallback(async (v: Omit<Voltage, "id">) => {
-    const newV = { ...v, id: `v${Date.now()}` };
-    setVoltages((prev) => [...prev, newV]);
-    addLog("VOLTAGE_ADDED", `Voltagem "${v.label}" criada`, undefined, JSON.stringify(newV));
-  }, [addLog]);
-
-  const updateVoltage = useCallback(async (id: string, data: Partial<Voltage>) => {
-    setVoltages((prev) => {
-      const old = prev.find((v) => v.id === id);
-      const updated = prev.map((v) => v.id === id ? { ...v, ...data } : v);
-      addLog("VOLTAGE_UPDATED", `Voltagem "${old?.label}" atualizada`, JSON.stringify(old), JSON.stringify({ ...old, ...data }));
-      return updated;
-    });
-  }, [addLog]);
-
-  const toggleVoltage = useCallback(async (id: string): Promise<{ blocked: boolean; count: number }> => {
-    const v = voltages.find((vt) => vt.id === id);
-    if (!v) return { blocked: true, count: 0 };
-    const depCount = lots.filter((l) => l.voltage === v.label).length;
-    setVoltages((prev) => prev.map((vt) => vt.id === id ? { ...vt, active: !vt.active } : vt));
-    addLog("VOLTAGE_TOGGLED", `Voltagem "${v.label}" ${v.active ? "desativada" : "ativada"}`);
-    return { blocked: false, count: depCount };
-  }, [voltages, lots, addLog]);
 
   // === Users ===
   const addUser = useCallback(async (u: Omit<User, "id" | "createdAt">): Promise<string> => {
@@ -238,30 +214,51 @@ export const InventoryProvider: React.FC<{ children: React.ReactNode }> = ({ chi
   const updateUser = useCallback(async (id: string, data: Partial<User>) => {
     setUsers((prev) => {
       const old = prev.find((u) => u.id === id);
-      const updated = prev.map((u) => u.id === id ? { ...u, ...data } : u);
       if (data.role && old?.role !== data.role) {
         addLog("USER_ROLE_CHANGED", `Papel de "${old?.name}" alterado de ${old?.role} para ${data.role}`, JSON.stringify({ role: old?.role }), JSON.stringify({ role: data.role }));
       } else {
         addLog("USER_UPDATED", `Usuário "${old?.name}" atualizado`, JSON.stringify(old), JSON.stringify({ ...old, ...data }));
       }
-      return updated;
+      return prev.map((u) => u.id === id ? { ...u, ...data } : u);
     });
   }, [addLog]);
 
-  const toggleUser = useCallback(async (id: string): Promise<{ blocked: boolean; reason?: string }> => {
+  const deleteUser = useCallback(async (id: string): Promise<{ blocked: boolean; reason?: string }> => {
     const target = users.find((u) => u.id === id);
     if (!target) return { blocked: true, reason: "Usuário não encontrado" };
-    // If deactivating an admin, check if it's the last active admin
-    if (target.active && target.role === "admin") {
+    if (target.role === "admin") {
       const activeAdmins = users.filter((u) => u.role === "admin" && u.active);
       if (activeAdmins.length <= 1) {
-        return { blocked: true, reason: "Não é possível desativar o único administrador ativo do sistema." };
+        return { blocked: true, reason: "Não é possível excluir o único administrador ativo do sistema." };
       }
     }
-    setUsers((prev) => prev.map((u) => u.id === id ? { ...u, active: !u.active } : u));
-    addLog("USER_TOGGLED", `Usuário "${target.name}" ${target.active ? "desativado" : "ativado"}`);
+    setUsers((prev) => prev.filter((u) => u.id !== id));
+    addLog("USER_DELETED", `Usuário "${target.name}" excluído`, JSON.stringify(target));
     return { blocked: false };
   }, [users, addLog]);
+
+  // === Legends ===
+  const addLegend = useCallback(async (l: Omit<LegendEntry, "id">) => {
+    const newL = { ...l, id: `leg${Date.now()}` };
+    setLegends((prev) => [...prev, newL]);
+    addLog("LEGEND_ADDED", `Legenda "${l.term}" criada`, undefined, JSON.stringify(newL));
+  }, [addLog]);
+
+  const updateLegend = useCallback(async (id: string, data: Partial<LegendEntry>) => {
+    setLegends((prev) => {
+      const old = prev.find((l) => l.id === id);
+      addLog("LEGEND_UPDATED", `Legenda "${old?.term}" atualizada`, JSON.stringify(old), JSON.stringify({ ...old, ...data }));
+      return prev.map((l) => l.id === id ? { ...l, ...data } : l);
+    });
+  }, [addLog]);
+
+  const deleteLegend = useCallback(async (id: string) => {
+    setLegends((prev) => {
+      const old = prev.find((l) => l.id === id);
+      if (old) addLog("LEGEND_DELETED", `Legenda "${old.term}" removida`, JSON.stringify(old));
+      return prev.filter((l) => l.id !== id);
+    });
+  }, [addLog]);
 
   const markNotificationRead = useCallback((id: string) => {
     setNotifications((prev) => prev.map((n) => n.id === id ? { ...n, read: true } : n));
@@ -272,14 +269,14 @@ export const InventoryProvider: React.FC<{ children: React.ReactNode }> = ({ chi
   return (
     <InventoryContext.Provider
       value={{
-        lots, productModels, defectTypes, productCategories, lotCategories, voltages, users,
-        auditLogs, notifications, palletMap,
-        createLot, addItemToLot, pauseLot, resumeLot, finishLot, placePallet,
-        addProductModel, addDefectType, deleteProductModel, deleteDefectType,
-        addProductCategory, updateProductCategory, toggleProductCategory,
-        addLotCategory, updateLotCategory, toggleLotCategory,
-        addVoltage, updateVoltage, toggleVoltage,
-        addUser, updateUser, toggleUser,
+        lots, productModels, defectTypes, users,
+        auditLogs, notifications, palletMap, legends,
+        createLot, addItemToLot, deleteLastItem, deleteItem,
+        pauseLot, resumeLot, finishLot, finishLotWithoutLocation, placePallet,
+        addProductModel, updateProductModel, deleteProductModel,
+        addDefectType, updateDefectType, deleteDefectType,
+        addUser, updateUser, deleteUser,
+        addLegend, updateLegend, deleteLegend,
         markNotificationRead, unreadCount,
       }}
     >

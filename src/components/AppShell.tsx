@@ -1,9 +1,10 @@
 import React, { useState } from "react";
-import { Bell, LogOut, Menu, Package, Map, BarChart3, Settings, X } from "lucide-react";
+import { Bell, LogOut, Menu, Package, Map, Settings, X } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { useInventory } from "@/contexts/InventoryContext";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import logoGlobo from "@/assets/logo-globo.png";
 
 interface AppShellProps {
   children: React.ReactNode;
@@ -13,8 +14,8 @@ interface AppShellProps {
 }
 
 const navItems = [
-  { id: "lots", label: "Lotes", icon: Package },
-  { id: "map", label: "Mapa", icon: Map },
+  { id: "lots", label: "Lotes", icon: Package, adminOnly: false },
+  { id: "map", label: "Mapa", icon: Map, adminOnly: false },
   { id: "admin", label: "Admin", icon: Settings, adminOnly: true },
 ];
 
@@ -27,18 +28,14 @@ const AppShell: React.FC<AppShellProps> = ({ children, currentPage, onNavigate, 
 
   return (
     <div className="flex h-screen overflow-hidden">
-      {/* Mobile overlay */}
       {sidebarOpen && (
         <div className="fixed inset-0 z-40 bg-foreground/20 backdrop-blur-sm lg:hidden" onClick={() => setSidebarOpen(false)} />
       )}
 
-      {/* Sidebar */}
       <aside className={`fixed lg:static inset-y-0 left-0 z-50 w-64 bg-card border-r transform transition-transform lg:translate-x-0 ${sidebarOpen ? "translate-x-0" : "-translate-x-full"}`}>
         <div className="flex items-center justify-between h-16 px-6 border-b">
           <div className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-lg bg-primary flex items-center justify-center">
-              <span className="text-primary-foreground font-bold text-sm">RT</span>
-            </div>
+            <img src={logoGlobo} alt="Re-Teck" className="w-8 h-8 object-contain" />
             <span className="font-semibold text-foreground">Re-Teck</span>
           </div>
           <button className="lg:hidden" onClick={() => setSidebarOpen(false)}>
@@ -79,9 +76,7 @@ const AppShell: React.FC<AppShellProps> = ({ children, currentPage, onNavigate, 
         </div>
       </aside>
 
-      {/* Main */}
       <div className="flex-1 flex flex-col overflow-hidden">
-        {/* Top bar */}
         <header className="h-16 border-b bg-card flex items-center justify-between px-4 lg:px-6">
           <button className="lg:hidden" onClick={() => setSidebarOpen(true)}>
             <Menu className="w-5 h-5" />
@@ -91,17 +86,19 @@ const AppShell: React.FC<AppShellProps> = ({ children, currentPage, onNavigate, 
               {navItems.find((n) => n.id === currentPage)?.label || ""}
             </h1>
           </div>
-          <button className="relative p-2 rounded-lg hover:bg-accent transition-colors" onClick={onToggleNotifications}>
-            <Bell className="w-5 h-5 text-muted-foreground" />
-            {unreadCount > 0 && (
-              <Badge className="absolute -top-1 -right-1 h-5 w-5 flex items-center justify-center p-0 text-[10px]">
-                {unreadCount}
-              </Badge>
-            )}
-          </button>
+          {/* Notifications: only admin */}
+          {isAdmin ? (
+            <button className="relative p-2 rounded-lg hover:bg-accent transition-colors" onClick={onToggleNotifications}>
+              <Bell className="w-5 h-5 text-muted-foreground" />
+              {unreadCount > 0 && (
+                <Badge className="absolute -top-1 -right-1 h-5 w-5 flex items-center justify-center p-0 text-[10px]">
+                  {unreadCount}
+                </Badge>
+              )}
+            </button>
+          ) : <div />}
         </header>
 
-        {/* Content */}
         <main className="flex-1 overflow-auto p-4 lg:p-6">
           {children}
         </main>

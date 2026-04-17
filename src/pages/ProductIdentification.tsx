@@ -4,7 +4,11 @@ import AutocompleteInput from "@/components/AutocompleteInput";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Send, Pause, CheckCircle, AlertTriangle } from "lucide-react";
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import { Send, Pause, CheckCircle, AlertTriangle, Trash2 } from "lucide-react";
 
 interface ProductIdentificationProps {
   lotId: string;
@@ -13,7 +17,7 @@ interface ProductIdentificationProps {
 }
 
 const ProductIdentification: React.FC<ProductIdentificationProps> = ({ lotId, onBack, onFinish }) => {
-  const { lots, productModels, defectTypes, addItemToLot, pauseLot } = useInventory();
+  const { lots, productModels, defectTypes, addItemToLot, pauseLot, deleteLastItem } = useInventory();
   const lot = lots.find((l) => l.id === lotId);
 
   const [productName, setProductName] = useState("");
@@ -22,6 +26,7 @@ const ProductIdentification: React.FC<ProductIdentificationProps> = ({ lotId, on
   const [defectId, setDefectId] = useState("");
   const [observation, setObservation] = useState("");
   const [showDuplicateModal, setShowDuplicateModal] = useState(false);
+  const [confirmDeleteLast, setConfirmDeleteLast] = useState(false);
 
   const productOptions = productModels.map((p) => ({ id: p.id, label: `${p.brand} - ${p.name}` }));
   const defectOptions = defectTypes.map((d) => ({ id: d.id, label: d.name }));
@@ -48,7 +53,6 @@ const ProductIdentification: React.FC<ProductIdentificationProps> = ({ lotId, on
 
   const handleSend = () => {
     if (!productName || !defectName) return;
-    // Check for duplicate
     if (lastItem && lastItem.productName === productName && lastItem.defectName === defectName) {
       setShowDuplicateModal(true);
       return;
@@ -73,7 +77,7 @@ const ProductIdentification: React.FC<ProductIdentificationProps> = ({ lotId, on
               <AlertTriangle className="w-12 h-12 text-warning mx-auto" />
               <h3 className="font-semibold text-foreground">Atenção: Produto Duplicado</h3>
               <p className="text-sm text-muted-foreground">
-                Este produto é igual ao anterior. Deseja duplicar este item?
+                Este produto é igual ao anterior ({lastItem?.productName} — {lastItem?.defectName}). Deseja realmente duplicar este item?
               </p>
               <div className="flex gap-3">
                 <Button variant="outline" className="flex-1" onClick={() => setShowDuplicateModal(false)}>
@@ -88,13 +92,39 @@ const ProductIdentification: React.FC<ProductIdentificationProps> = ({ lotId, on
         </div>
       )}
 
+      {/* Confirm delete last */}
+      <AlertDialog open={confirmDeleteLast} onOpenChange={setConfirmDeleteLast}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Excluir último item?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Tem certeza que deseja excluir o último item cadastrado ({lastItem?.productName} — {lastItem?.defectName})? Esta ação não pode ser desfeita.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={async () => { await deleteLastItem(lotId); setConfirmDeleteLast(false); }}
+            >
+              Excluir
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-xl font-semibold text-foreground">{lot.name}</h2>
-          <p className="text-sm text-muted-foreground">Lote #{lot.lotNumber} · {lot.category} · {lot.items.length} itens</p>
+          <p className="text-sm text-muted-foreground">
+            {lot.items.length} itens{lot.observation ? ` · "${lot.observation}"` : ""}
+          </p>
         </div>
-        <Badge variant="default">Ativo</Badge>
+        <div className="flex gap-2">
+          {lot.isB2B && <Badge className="bg-primary text-primary-foreground">B2B</Badge>}
+          <Badge variant="default">Ativo</Badge>
+        </div>
       </div>
 
       {/* Dual card layout */}
@@ -135,21 +165,35 @@ const ProductIdentification: React.FC<ProductIdentificationProps> = ({ lotId, on
 
         {/* Right: Live Feed */}
         <Card>
-          <CardHeader><CardTitle className="text-base">Últimos Itens Cadastrados</CardTitle></CardHeader>
+          <CardHeader className="flex flex-row items-center justify-between">
+            <CardTitle className="text-base">Últimos Itens Cadastrados</CardTitle>
+            {lastItem && (
+              <Button variant="ghost" size="sm" onClick={() => setConfirmDeleteLast(true)} className="text-destructive">
+                <Trash2 className="w-3 h-3 mr-1" /> Excluir último
+              </Button>
+            )}
+          </CardHeader>
           <CardContent>
             {lastItems.length === 0 ? (
               <p className="text-sm text-muted-foreground text-center py-8">Nenhum item cadastrado ainda</p>
             ) : (
               <div className="space-y-2">
                 {lastItems.map((item, i) => (
-                  <div key={item.id} className={`flex items-center justify-between p-3 rounded-lg border ${i === 0 ? "bg-accent/50 border-primary/20" : ""}`}>
-                    <div>
-                      <p className="text-sm font-medium text-foreground">{item.productName}</p>
-                      <p className="text-xs text-muted-foreground">{item.defectName}</p>
+                  <div key={item.id} className={`p-3 rounded-lg border ${i === 0 ? "bg-accent/50 border-primary/20" : ""}`}>
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="text-sm font-medium text-foreground">{item.productName}</p>
+                        <p className="text-xs text-muted-foreground">{item.defectName}</p>
+                      </div>
+                      <span className="text-xs text-muted-foreground">
+                        {new Date(item.createdAt).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}
+                      </span>
                     </div>
-                    <span className="text-xs text-muted-foreground">
-                      {new Date(item.createdAt).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}
-                    </span>
+                    {item.observation && (
+                      <p className="text-xs text-muted-foreground mt-2 italic border-t pt-2">
+                        Obs: {item.observation}
+                      </p>
+                    )}
                   </div>
                 ))}
               </div>

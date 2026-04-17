@@ -2,7 +2,8 @@ import React, { useState } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
+import logoCompleto from "@/assets/logo-completo.png";
 
 const LoginPage: React.FC = () => {
   const { login } = useAuth();
@@ -23,14 +24,11 @@ const LoginPage: React.FC = () => {
   return (
     <div className="min-h-screen flex items-center justify-center bg-background p-4">
       <Card className="w-full max-w-md animate-fade-in">
-        <CardHeader className="text-center">
-          <div className="mx-auto w-14 h-14 rounded-xl bg-primary flex items-center justify-center mb-4">
-            <span className="text-primary-foreground font-bold text-xl">RT</span>
+        <CardContent className="p-8">
+          <div className="flex flex-col items-center mb-6">
+            <img src={logoCompleto} alt="Re-Teck — Reverse Supply Chain Management" className="w-full max-w-xs h-auto mb-2" />
+            <p className="text-sm text-muted-foreground">Sistema de Logística Reversa</p>
           </div>
-          <CardTitle className="text-2xl">Re-Teck ERP</CardTitle>
-          <CardDescription>Sistema de Logística Reversa</CardDescription>
-        </CardHeader>
-        <CardContent>
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>
               <label className="text-sm font-medium text-foreground">Email</label>
@@ -45,7 +43,8 @@ const LoginPage: React.FC = () => {
               {loading ? "Entrando..." : "Entrar"}
             </Button>
             <p className="text-xs text-muted-foreground text-center">
-              Demo: admin@reteck.com / admin123
+              Demo admin: admin@reteck.com / admin123<br />
+              Demo operador: maria@reteck.com / op123
             </p>
           </form>
         </CardContent>

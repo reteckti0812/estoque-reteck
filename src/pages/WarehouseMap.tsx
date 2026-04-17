@@ -4,10 +4,16 @@ import { streetConfig, getPalletCode, streetLetterToNumber } from "@/data/mockDa
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { X } from "lucide-react";
+import { X, MapPinOff } from "lucide-react";
+import LegendsPanel from "@/components/LegendsPanel";
 
 interface WarehouseMapProps {
-  selectMode?: { lotId: string; onSelect: (address: string) => void; onCancel: () => void };
+  selectMode?: {
+    lotId: string;
+    onSelect: (address: string) => void;
+    onCancel: () => void;
+    onFinishWithoutLocation: () => void;
+  };
 }
 
 const streets = Object.keys(streetConfig);
@@ -20,13 +26,16 @@ const WarehouseMap: React.FC<WarehouseMapProps> = ({ selectMode }) => {
   const config = streetConfig[selectedStreet];
 
   const occupiedMap = useMemo(() => {
-    const map = new Map<string, typeof palletMap[0]>();
-    palletMap.forEach((p) => map.set(`${p.street}-${p.column}-${p.level}`, p));
+    const map = new Map<string, { pallet: typeof palletMap[0]; isB2B: boolean }>();
+    palletMap.forEach((p) => {
+      const lot = lots.find((l) => l.id === p.lotId);
+      map.set(`${p.street}-${p.column}-${p.level}`, { pallet: p, isB2B: lot?.isB2B || false });
+    });
     return map;
-  }, [palletMap]);
+  }, [palletMap, lots]);
 
-  const inspectedPallet = inspectCell ? occupiedMap.get(`${inspectCell.street}-${inspectCell.col}-${inspectCell.level}`) : null;
-  const inspectedLot = inspectedPallet ? lots.find((l) => l.id === inspectedPallet.lotId) : null;
+  const inspectedEntry = inspectCell ? occupiedMap.get(`${inspectCell.street}-${inspectCell.col}-${inspectCell.level}`) : null;
+  const inspectedLot = inspectedEntry ? lots.find((l) => l.id === inspectedEntry.pallet.lotId) : null;
 
   const handleCellClick = (col: number, level: number) => {
     const key = `${selectedStreet}-${col}-${level}`;
@@ -47,11 +56,16 @@ const WarehouseMap: React.FC<WarehouseMapProps> = ({ selectMode }) => {
     <div className="animate-fade-in space-y-4">
       {selectMode && (
         <Card className="border-primary bg-accent/30">
-          <CardContent className="p-4 flex items-center justify-between">
+          <CardContent className="p-4 flex items-center justify-between flex-wrap gap-2">
             <p className="text-sm font-medium text-foreground">
               Selecione uma posição vazia para o pallet do lote
             </p>
-            <Button variant="outline" size="sm" onClick={selectMode.onCancel}>Cancelar</Button>
+            <div className="flex gap-2">
+              <Button variant="outline" size="sm" onClick={selectMode.onFinishWithoutLocation}>
+                <MapPinOff className="w-4 h-4 mr-1" /> Finalizar sem localização
+              </Button>
+              <Button variant="outline" size="sm" onClick={selectMode.onCancel}>Cancelar</Button>
+            </div>
           </CardContent>
         </Card>
       )}
@@ -62,11 +76,9 @@ const WarehouseMap: React.FC<WarehouseMapProps> = ({ selectMode }) => {
 
       {/* Legend */}
       <div className="flex flex-wrap gap-4 text-xs">
-        <span className="flex items-center gap-1"><span className="w-3 h-3 rounded bg-map-entrance" /> Entrada</span>
-        <span className="flex items-center gap-1"><span className="w-3 h-3 rounded bg-map-table" /> Mesas</span>
-        <span className="flex items-center gap-1"><span className="w-3 h-3 rounded bg-map-corridor" /> Corredores</span>
-        <span className="flex items-center gap-1"><span className="w-3 h-3 rounded bg-map-empty border" /> Vazio</span>
-        <span className="flex items-center gap-1"><span className="w-3 h-3 rounded bg-map-occupied" /> Ocupado</span>
+        <span className="flex items-center gap-1"><span className="w-3 h-3 rounded bg-primary" /> B2B</span>
+        <span className="flex items-center gap-1"><span className="w-3 h-3 rounded bg-muted border" /> Vazio</span>
+        <span className="flex items-center gap-1"><span className="w-3 h-3 rounded bg-muted-foreground/40" /> Outros</span>
       </div>
 
       {/* Street selector */}
@@ -109,21 +121,26 @@ const WarehouseMap: React.FC<WarehouseMapProps> = ({ selectMode }) => {
                   {Array.from({ length: config.columns }, (_, ci) => {
                     const col = ci + 1;
                     const key = `${selectedStreet}-${col}-${level}`;
-                    const isOccupied = occupiedMap.has(key);
+                    const entry = occupiedMap.get(key);
+                    const isOccupied = !!entry;
+                    const isB2B = entry?.isB2B;
                     const isInspected = inspectCell?.street === selectedStreet && inspectCell?.col === col && inspectCell?.level === level;
+
+                    let cellClass = "bg-muted border-transparent"; // empty
+                    if (isInspected) {
+                      cellClass = "ring-2 ring-primary border-primary bg-primary/20 text-foreground";
+                    } else if (isOccupied && isB2B) {
+                      cellClass = "bg-primary border-primary/50 text-primary-foreground hover:opacity-80";
+                    } else if (isOccupied) {
+                      cellClass = "bg-muted-foreground/40 border-muted-foreground/30 text-foreground hover:opacity-80";
+                    } else if (selectMode) {
+                      cellClass = "bg-muted border-dashed border-primary/30 hover:bg-primary/10 cursor-pointer";
+                    }
 
                     return (
                       <button
                         key={col}
-                        className={`w-10 h-8 rounded text-[10px] font-medium border transition-all ${
-                          isInspected
-                            ? "ring-2 ring-primary border-primary bg-primary/20 text-foreground"
-                            : isOccupied
-                            ? "bg-map-occupied border-map-occupied/50 text-foreground hover:opacity-80"
-                            : selectMode
-                            ? "bg-map-empty border-dashed border-primary/30 hover:bg-primary/10 cursor-pointer"
-                            : "bg-map-empty border-transparent"
-                        }`}
+                        className={`w-10 h-8 rounded text-[10px] font-medium border transition-all ${cellClass}`}
                         onClick={() => handleCellClick(col, level)}
                       >
                         {isOccupied ? "●" : ""}
@@ -138,12 +155,13 @@ const WarehouseMap: React.FC<WarehouseMapProps> = ({ selectMode }) => {
       </Card>
 
       {/* Inspect panel */}
-      {inspectCell && inspectedPallet && inspectedLot && (
+      {inspectCell && inspectedEntry && inspectedLot && (
         <Card className="animate-fade-in">
           <CardHeader className="pb-2">
             <div className="flex items-center justify-between">
-              <CardTitle className="text-base">
+              <CardTitle className="text-base flex items-center gap-2">
                 {getPalletCode(inspectCell.street, inspectCell.col, inspectCell.level)} — {inspectedLot.name}
+                {inspectedLot.isB2B && <Badge className="bg-primary text-primary-foreground text-[10px]">B2B</Badge>}
               </CardTitle>
               <button onClick={() => setInspectCell(null)}><X className="w-4 h-4 text-muted-foreground" /></button>
             </div>
@@ -161,6 +179,8 @@ const WarehouseMap: React.FC<WarehouseMapProps> = ({ selectMode }) => {
           </CardContent>
         </Card>
       )}
+
+      <LegendsPanel />
     </div>
   );
 };
