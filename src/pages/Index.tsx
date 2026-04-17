@@ -10,14 +10,17 @@ import WarehouseMap from "@/pages/WarehouseMap";
 import AdminPanel from "@/pages/AdminPanel";
 
 const Index: React.FC = () => {
-  const { user } = useAuth();
-  const { finishLot, placePallet } = useInventory();
+  const { user, isAdmin } = useAuth();
+  const { finishLot, finishLotWithoutLocation, placePallet } = useInventory();
   const [page, setPage] = useState("lots");
   const [activeLotId, setActiveLotId] = useState<string | null>(null);
   const [notifOpen, setNotifOpen] = useState(false);
   const [mapSelectMode, setMapSelectMode] = useState<{ lotId: string } | null>(null);
 
   if (!user) return <LoginPage />;
+
+  // Block admin page for non-admins
+  const safePage = page === "admin" && !isAdmin ? "lots" : page;
 
   const handleStartLot = (lotId: string) => setActiveLotId(lotId);
   const handleBackToLots = () => setActiveLotId(null);
@@ -27,9 +30,13 @@ const Index: React.FC = () => {
     setPage("map");
   };
 
+  const handleAddressLot = (lotId: string) => {
+    setMapSelectMode({ lotId });
+    setPage("map");
+  };
+
   const handlePalletSelect = async (address: string) => {
     if (!mapSelectMode) return;
-    // Parse address E-{street}-{col}-{level}
     const parts = address.split("-");
     const streetNum = parseInt(parts[1]);
     const col = parseInt(parts[2]);
@@ -44,34 +51,43 @@ const Index: React.FC = () => {
     setPage("lots");
   };
 
+  const handleFinishWithoutLocation = async () => {
+    if (!mapSelectMode) return;
+    await finishLotWithoutLocation(mapSelectMode.lotId);
+    setMapSelectMode(null);
+    setActiveLotId(null);
+    setPage("lots");
+  };
+
   const renderContent = () => {
-    if (page === "lots") {
+    if (safePage === "lots") {
       if (activeLotId) {
         return <ProductIdentification lotId={activeLotId} onBack={handleBackToLots} onFinish={handleFinishLot} />;
       }
-      return <LotIdentification onStartLot={handleStartLot} />;
+      return <LotIdentification onStartLot={handleStartLot} onAddressLot={handleAddressLot} />;
     }
-    if (page === "map") {
+    if (safePage === "map") {
       return (
         <WarehouseMap
           selectMode={mapSelectMode ? {
             lotId: mapSelectMode.lotId,
             onSelect: handlePalletSelect,
             onCancel: () => { setMapSelectMode(null); setPage("lots"); },
+            onFinishWithoutLocation: handleFinishWithoutLocation,
           } : undefined}
         />
       );
     }
-    if (page === "admin") return <AdminPanel />;
+    if (safePage === "admin" && isAdmin) return <AdminPanel />;
     return null;
   };
 
   return (
     <>
-      <AppShell currentPage={page} onNavigate={setPage} onToggleNotifications={() => setNotifOpen(!notifOpen)}>
+      <AppShell currentPage={safePage} onNavigate={setPage} onToggleNotifications={() => setNotifOpen(!notifOpen)}>
         {renderContent()}
       </AppShell>
-      <NotificationPanel open={notifOpen} onClose={() => setNotifOpen(false)} />
+      {isAdmin && <NotificationPanel open={notifOpen} onClose={() => setNotifOpen(false)} />}
     </>
   );
 };

@@ -1,51 +1,35 @@
 import React, { useState } from "react";
 import { useInventory } from "@/contexts/InventoryContext";
-import AutocompleteInput from "@/components/AutocompleteInput";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Play, Pause, Clock, Package } from "lucide-react";
+import { Play, Pause, Clock, Package, MapPin } from "lucide-react";
+import LegendsPanel from "@/components/LegendsPanel";
 
 interface LotIdentificationProps {
   onStartLot: (lotId: string) => void;
+  onAddressLot: (lotId: string) => void;
 }
 
-const LotIdentification: React.FC<LotIdentificationProps> = ({ onStartLot }) => {
-  const { lots, productModels, lotCategories, voltages, createLot, resumeLot } = useInventory();
-  const [showPaused, setShowPaused] = useState(false);
+type View = "form" | "paused" | "awaiting";
+
+const LotIdentification: React.FC<LotIdentificationProps> = ({ onStartLot, onAddressLot }) => {
+  const { lots, createLot, resumeLot } = useInventory();
+  const [view, setView] = useState<View>("form");
 
   const [name, setName] = useState("");
-  const [selectedProducts, setSelectedProducts] = useState<string[]>([]);
-  const [currentProduct, setCurrentProduct] = useState("");
-  const [category, setCategory] = useState("");
-  const [voltage, setVoltage] = useState("");
-  const [lotNumber, setLotNumber] = useState("");
+  const [isB2B, setIsB2B] = useState<"yes" | "no" | "">("");
   const [observation, setObservation] = useState("");
 
-  const productOptions = productModels.map((p) => ({ id: p.id, label: `${p.brand} - ${p.name}` }));
   const pausedLots = lots.filter((l) => l.status === "paused");
-  const activeLotCategories = lotCategories.filter((c) => c.active);
-  const activeVoltages = voltages.filter((v) => v.active);
-
-  const handleAddProduct = () => {
-    if (currentProduct && !selectedProducts.includes(currentProduct)) {
-      setSelectedProducts([...selectedProducts, currentProduct]);
-      setCurrentProduct("");
-    }
-  };
+  const awaitingLots = lots.filter((l) => l.status === "awaiting_location");
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!name || !category || !lotNumber) return;
-    const lot = await createLot({
-      name,
-      products: selectedProducts,
-      category,
-      voltage,
-      lotNumber: parseInt(lotNumber),
-      observation,
-    });
+    if (!name || isB2B === "") return;
+    const lot = await createLot({ name, isB2B: isB2B === "yes", observation });
+    setName(""); setIsB2B(""); setObservation("");
     onStartLot(lot.id);
   };
 
@@ -54,12 +38,12 @@ const LotIdentification: React.FC<LotIdentificationProps> = ({ onStartLot }) => 
     onStartLot(lotId);
   };
 
-  if (showPaused) {
+  if (view === "paused") {
     return (
       <div className="animate-fade-in space-y-4">
         <div className="flex items-center justify-between">
           <h2 className="text-xl font-semibold text-foreground">Lotes Pausados</h2>
-          <Button variant="outline" onClick={() => setShowPaused(false)}>Voltar</Button>
+          <Button variant="outline" onClick={() => setView("form")}>Voltar</Button>
         </div>
         {pausedLots.length === 0 ? (
           <Card><CardContent className="p-8 text-center text-muted-foreground">Nenhum lote pausado</CardContent></Card>
@@ -74,11 +58,11 @@ const LotIdentification: React.FC<LotIdentificationProps> = ({ onStartLot }) => 
                   </div>
                 </CardHeader>
                 <CardContent className="space-y-2">
-                  <div className="flex gap-4 text-sm text-muted-foreground">
-                    <span>Nº {lot.lotNumber}</span>
-                    <span>{lot.category}</span>
+                  <div className="flex gap-3 text-sm text-muted-foreground flex-wrap">
                     <span>{lot.items.length} itens</span>
+                    {lot.isB2B && <Badge variant="outline" className="text-[10px]">B2B</Badge>}
                   </div>
+                  {lot.observation && <p className="text-xs text-muted-foreground italic">"{lot.observation}"</p>}
                   <p className="text-xs text-muted-foreground flex items-center gap-1">
                     <Clock className="w-3 h-3" />
                     {new Date(lot.createdAt).toLocaleString("pt-BR")}
@@ -95,13 +79,55 @@ const LotIdentification: React.FC<LotIdentificationProps> = ({ onStartLot }) => 
     );
   }
 
+  if (view === "awaiting") {
+    return (
+      <div className="animate-fade-in space-y-4">
+        <div className="flex items-center justify-between">
+          <h2 className="text-xl font-semibold text-foreground">Lotes Aguardando Localização</h2>
+          <Button variant="outline" onClick={() => setView("form")}>Voltar</Button>
+        </div>
+        {awaitingLots.length === 0 ? (
+          <Card><CardContent className="p-8 text-center text-muted-foreground">Nenhum lote aguardando localização</CardContent></Card>
+        ) : (
+          <div className="grid gap-4 md:grid-cols-2">
+            {awaitingLots.map((lot) => (
+              <Card key={lot.id} className="hover:shadow-md transition-shadow">
+                <CardHeader className="pb-2">
+                  <div className="flex items-center justify-between">
+                    <CardTitle className="text-base">{lot.name}</CardTitle>
+                    <Badge className="bg-warning text-warning-foreground"><MapPin className="w-3 h-3 mr-1" /> Sem local</Badge>
+                  </div>
+                </CardHeader>
+                <CardContent className="space-y-2">
+                  <div className="flex gap-3 text-sm text-muted-foreground flex-wrap">
+                    <span>{lot.items.length} itens</span>
+                    {lot.isB2B && <Badge variant="outline" className="text-[10px]">B2B</Badge>}
+                  </div>
+                  {lot.observation && <p className="text-xs text-muted-foreground italic">"{lot.observation}"</p>}
+                  <Button size="sm" onClick={() => onAddressLot(lot.id)} className="w-full mt-2">
+                    <MapPin className="w-3 h-3 mr-1" /> Endereçar no Mapa
+                  </Button>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        )}
+      </div>
+    );
+  }
+
   return (
     <div className="animate-fade-in max-w-2xl mx-auto space-y-4">
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between flex-wrap gap-2">
         <h2 className="text-xl font-semibold text-foreground">Identificação do Lote</h2>
-        <Button variant="outline" onClick={() => setShowPaused(true)}>
-          <Pause className="w-4 h-4 mr-2" /> Lotes Pausados ({pausedLots.length})
-        </Button>
+        <div className="flex gap-2 flex-wrap">
+          <Button variant="outline" size="sm" onClick={() => setView("paused")}>
+            <Pause className="w-4 h-4 mr-2" /> Pausados ({pausedLots.length})
+          </Button>
+          <Button variant="outline" size="sm" onClick={() => setView("awaiting")}>
+            <MapPin className="w-4 h-4 mr-2" /> Sem localização ({awaitingLots.length})
+          </Button>
+        </div>
       </div>
 
       <Card>
@@ -113,58 +139,17 @@ const LotIdentification: React.FC<LotIdentificationProps> = ({ onStartLot }) => 
             </div>
 
             <div>
-              <label className="text-sm font-medium text-foreground">Produtos do Lote *</label>
-              <div className="flex gap-2">
-                <div className="flex-1">
-                  <AutocompleteInput
-                    options={productOptions}
-                    value={currentProduct}
-                    onChange={(v) => setCurrentProduct(v)}
-                    placeholder="Buscar produto..."
-                  />
-                </div>
-                <Button type="button" variant="outline" onClick={handleAddProduct}>+</Button>
+              <label className="text-sm font-medium text-foreground">É B2B? *</label>
+              <div className="flex gap-3 mt-2">
+                <label className="flex items-center gap-2 cursor-pointer flex-1 border rounded-lg p-3 hover:bg-accent">
+                  <input type="radio" name="b2b" checked={isB2B === "yes"} onChange={() => setIsB2B("yes")} />
+                  <span className="text-sm font-medium">Sim, é B2B</span>
+                </label>
+                <label className="flex items-center gap-2 cursor-pointer flex-1 border rounded-lg p-3 hover:bg-accent">
+                  <input type="radio" name="b2b" checked={isB2B === "no"} onChange={() => setIsB2B("no")} />
+                  <span className="text-sm font-medium">Não é B2B</span>
+                </label>
               </div>
-              {selectedProducts.length > 0 && (
-                <div className="flex flex-wrap gap-1 mt-2">
-                  {selectedProducts.map((p, i) => (
-                    <Badge key={i} variant="secondary" className="cursor-pointer" onClick={() => setSelectedProducts(selectedProducts.filter((_, j) => j !== i))}>
-                      {p} ×
-                    </Badge>
-                  ))}
-                </div>
-              )}
-            </div>
-
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label className="text-sm font-medium text-foreground">Categoria *</label>
-                <select
-                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
-                  value={category}
-                  onChange={(e) => setCategory(e.target.value)}
-                  required
-                >
-                  <option value="">Selecione</option>
-                  {activeLotCategories.map((c) => <option key={c.id} value={c.code}>{c.code} — {c.fullName}</option>)}
-                </select>
-              </div>
-              <div>
-                <label className="text-sm font-medium text-foreground">Voltagem</label>
-                <select
-                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
-                  value={voltage}
-                  onChange={(e) => setVoltage(e.target.value)}
-                >
-                  <option value="">Selecione</option>
-                  {activeVoltages.map((v) => <option key={v.id} value={v.label}>{v.label}</option>)}
-                </select>
-              </div>
-            </div>
-
-            <div>
-              <label className="text-sm font-medium text-foreground">Número do Lote *</label>
-              <Input type="number" value={lotNumber} onChange={(e) => setLotNumber(e.target.value)} placeholder="Ex: 1004" required />
             </div>
 
             <div>
@@ -177,12 +162,14 @@ const LotIdentification: React.FC<LotIdentificationProps> = ({ onStartLot }) => 
               />
             </div>
 
-            <Button type="submit" className="w-full" size="lg">
+            <Button type="submit" className="w-full" size="lg" disabled={!name || isB2B === ""}>
               <Package className="w-4 h-4 mr-2" /> Iniciar Lote
             </Button>
           </form>
         </CardContent>
       </Card>
+
+      <LegendsPanel />
     </div>
   );
 };

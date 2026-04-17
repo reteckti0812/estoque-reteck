@@ -11,7 +11,8 @@ interface AuthContextType {
 const AuthContext = createContext<AuthContextType | null>(null);
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [user, setUser] = useState<User | null>(mockUsers[0]); // Auto-login admin for dev
+  // Auto-login admin for dev convenience. To test as operator, logout and login with maria@reteck.com / op123
+  const [user, setUser] = useState<User | null>(mockUsers[0]);
 
   const login = useCallback(async (email: string, password: string) => {
     const found = mockUsers.find((u) => u.email === email && u.password === password && u.active);

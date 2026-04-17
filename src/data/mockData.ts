@@ -23,27 +23,6 @@ export interface DefectType {
   name: string;
 }
 
-export interface ProductCategory {
-  id: string;
-  name: string;
-  description: string;
-  active: boolean;
-}
-
-export interface LotCategory {
-  id: string;
-  code: string;
-  fullName: string;
-  description: string;
-  active: boolean;
-}
-
-export interface Voltage {
-  id: string;
-  label: string;
-  active: boolean;
-}
-
 export interface LotItem {
   id: string;
   productModelId: string;
@@ -58,12 +37,9 @@ export interface LotItem {
 export interface Lot {
   id: string;
   name: string;
-  products: string[];
-  category: string;
-  voltage: string;
-  lotNumber: number;
+  isB2B: boolean;
   observation: string;
-  status: "active" | "paused" | "finished";
+  status: "active" | "paused" | "finished" | "awaiting_location";
   items: LotItem[];
   createdAt: string;
   createdBy: string;
@@ -75,6 +51,7 @@ export interface AuditLog {
   userId: string;
   userName: string;
   action: string;
+  actionLabel: string; // PT label
   details: string;
   timestamp: string;
   oldData?: string;
@@ -95,6 +72,36 @@ export interface PalletCell {
   lotId?: string;
   lotName?: string;
 }
+
+export interface LegendEntry {
+  id: string;
+  term: string;
+  description: string;
+}
+
+// Mapping for action codes -> PT labels (used in audit log)
+export const ACTION_LABELS: Record<string, string> = {
+  LOT_CREATED: "Lote criado",
+  LOT_PAUSED: "Lote pausado",
+  LOT_RESUMED: "Lote retomado",
+  LOT_FINISHED: "Lote finalizado",
+  LOT_AWAITING_LOCATION: "Lote aguardando localização",
+  ITEM_ADDED: "Item adicionado",
+  ITEM_DELETED: "Item excluído",
+  PRODUCT_MODEL_ADDED: "Modelo de produto criado",
+  PRODUCT_MODEL_UPDATED: "Modelo de produto atualizado",
+  PRODUCT_MODEL_DELETED: "Modelo de produto excluído",
+  DEFECT_TYPE_ADDED: "Tipo de defeito criado",
+  DEFECT_TYPE_UPDATED: "Tipo de defeito atualizado",
+  DEFECT_TYPE_DELETED: "Tipo de defeito excluído",
+  USER_CREATED: "Usuário criado",
+  USER_UPDATED: "Usuário atualizado",
+  USER_ROLE_CHANGED: "Papel do usuário alterado",
+  USER_DELETED: "Usuário excluído",
+  LEGEND_ADDED: "Legenda criada",
+  LEGEND_UPDATED: "Legenda atualizada",
+  LEGEND_DELETED: "Legenda excluída",
+};
 
 // ---------- Users ----------
 export const mockUsers: User[] = [
@@ -131,41 +138,12 @@ export const mockDefectTypes: DefectType[] = [
   { id: "d10", name: "Sem Defeito Aparente" },
 ];
 
-// ---------- Product Categories ----------
-export const mockProductCategories: ProductCategory[] = [
-  { id: "pc1", name: "Eletrodomésticos", description: "Aparelhos domésticos em geral", active: true },
-  { id: "pc2", name: "Informática", description: "Notebooks, desktops e periféricos", active: true },
-  { id: "pc3", name: "Smartphones", description: "Celulares e acessórios", active: true },
-  { id: "pc4", name: "Tablets", description: "Tablets e e-readers", active: true },
-];
-
-// ---------- Lot Categories ----------
-export const mockLotCategories: LotCategory[] = [
-  { id: "lc1", code: "Liga", fullName: "Liga", description: "Produtos que ligam", active: true },
-  { id: "lc2", code: "NI", fullName: "Não Identificado", description: "Produtos não identificados", active: true },
-  { id: "lc3", code: "IQ", fullName: "Item Qualificado", description: "Itens qualificados para revenda", active: true },
-  { id: "lc4", code: "NF", fullName: "Não Funcional", description: "Produtos sem funcionamento", active: true },
-  { id: "lc5", code: "Cosmético", fullName: "Cosmético", description: "Apenas dano estético", active: true },
-  { id: "lc6", code: "Outro", fullName: "Outro", description: "Categorias diversas", active: true },
-];
-
-// ---------- Voltages ----------
-export const mockVoltages: Voltage[] = [
-  { id: "v1", label: "110V", active: true },
-  { id: "v2", label: "220V", active: true },
-  { id: "v3", label: "Bivolt", active: true },
-  { id: "v4", label: "N/A", active: true },
-];
-
 // ---------- Lots ----------
 export const mockLots: Lot[] = [
   {
     id: "l1",
     name: "Lote Apple Janeiro",
-    products: ["iPhone 13", "iPhone 14 Pro"],
-    category: "Liga",
-    voltage: "Bivolt",
-    lotNumber: 1001,
+    isB2B: true,
     observation: "Lote de iPhones recebidos em janeiro",
     status: "active",
     items: [
@@ -179,10 +157,7 @@ export const mockLots: Lot[] = [
   {
     id: "l2",
     name: "Lote Samsung Fevereiro",
-    products: ["Galaxy S23", "Galaxy A54"],
-    category: "NI",
-    voltage: "220V",
-    lotNumber: 1002,
+    isB2B: false,
     observation: "Samsung de parceiro X",
     status: "paused",
     items: [
@@ -195,10 +170,7 @@ export const mockLots: Lot[] = [
   {
     id: "l3",
     name: "Lote Misto Março",
-    products: ["Pixel 7", "MacBook Air M2"],
-    category: "IQ",
-    voltage: "110V",
-    lotNumber: 1003,
+    isB2B: true,
     observation: "",
     status: "finished",
     items: [
@@ -213,10 +185,10 @@ export const mockLots: Lot[] = [
 
 // ---------- Audit Logs ----------
 export const mockAuditLogs: AuditLog[] = [
-  { id: "a1", userId: "u2", userName: "Maria Operadora", action: "LOT_CREATED", details: "Lote Apple Janeiro criado", timestamp: "2026-04-15T08:30:00" },
-  { id: "a2", userId: "u2", userName: "Maria Operadora", action: "ITEM_ADDED", details: "iPhone 13 adicionado ao Lote 1001", timestamp: "2026-04-15T09:00:00" },
-  { id: "a3", userId: "u3", userName: "João Operador", action: "LOT_PAUSED", details: "Lote Samsung Fevereiro pausado", timestamp: "2026-04-14T15:00:00" },
-  { id: "a4", userId: "u2", userName: "Maria Operadora", action: "LOT_FINISHED", details: "Lote Misto Março finalizado - E-1-3-2", timestamp: "2026-04-13T11:00:00" },
+  { id: "a1", userId: "u2", userName: "Maria Operadora", action: "LOT_CREATED", actionLabel: ACTION_LABELS.LOT_CREATED, details: "Lote Apple Janeiro criado", timestamp: "2026-04-15T08:30:00" },
+  { id: "a2", userId: "u2", userName: "Maria Operadora", action: "ITEM_ADDED", actionLabel: ACTION_LABELS.ITEM_ADDED, details: "iPhone 13 adicionado ao Lote Apple Janeiro", timestamp: "2026-04-15T09:00:00" },
+  { id: "a3", userId: "u3", userName: "João Operador", action: "LOT_PAUSED", actionLabel: ACTION_LABELS.LOT_PAUSED, details: "Lote Samsung Fevereiro pausado", timestamp: "2026-04-14T15:00:00" },
+  { id: "a4", userId: "u2", userName: "Maria Operadora", action: "LOT_FINISHED", actionLabel: ACTION_LABELS.LOT_FINISHED, details: "Lote Misto Março finalizado - E-1-3-2", timestamp: "2026-04-13T11:00:00" },
 ];
 
 // ---------- Notifications ----------
@@ -224,6 +196,15 @@ export const mockNotifications: Notification[] = [
   { id: "n1", message: "Lote Misto Março finalizado por Maria Operadora", timestamp: "2026-04-13T11:00:00", read: false },
   { id: "n2", message: "Lote Samsung Fevereiro pausado por João Operador", timestamp: "2026-04-14T15:00:00", read: false },
   { id: "n3", message: "Novo produto cadastrado: Galaxy Tab S9", timestamp: "2026-04-14T10:00:00", read: true },
+];
+
+// ---------- Legends (nomenclaturas) ----------
+export const mockLegends: LegendEntry[] = [
+  { id: "leg1", term: "B2B", description: "Business to Business — lote destinado a venda corporativa." },
+  { id: "leg2", term: "NI", description: "Não Identificado — produtos sem identificação clara." },
+  { id: "leg3", term: "IQ", description: "Item Qualificado — pronto para revenda." },
+  { id: "leg4", term: "Liga", description: "Produto que liga normalmente." },
+  { id: "leg5", term: "NF", description: "Não Funcional — sem funcionamento." },
 ];
 
 // ---------- Warehouse Map ----------
